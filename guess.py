@@ -1,67 +1,70 @@
 import os
-import argparse
-from urllib.parse import urlparse
-from urllib.parse import urlunparse
 
-import requests
-from dotenv import load_dotenv
+from random import choice
+from string import ascii_lowercase
 
-
-def shorten_link(url, header):
-    request_url = 'https://api-ssl.bitly.com/v4/shorten'
-    request_body = {'long_url': url, 'domain': 'bit.ly'}
-    response = requests.post(request_url, headers=header, json=request_body)
-    response.raise_for_status()
-    parsed_bitlink = urlparse(response.json()['link'])._replace(scheme='')
-    bitlink = urlunparse(parsed_bitlink)[2:]
-    return bitlink
+FILENAME = 'sowpods.txt'
+os.chdir(os.path.dirname(__file__))
 
 
-def count_clicks(link, header):
-    parsed_link = urlparse(link)
-    if parsed_link.scheme:
-        link = urlunparse(parsed_link._replace(scheme=''))[2:]
-    request_url = f'https://api-ssl.bitly.com/v4/bitlinks/{link}/clicks/summary'
-    response = requests.get(request_url, headers=header)
-    response.raise_for_status()
-    click_count = response.json()['total_clicks']
-    return click_count
+def get_rand_word(filename):
+    with open(filename, 'r') as f:
+        return choice([x.strip() for x in f]).lower()
 
 
-def is_bitlink(link, header):
-    parsed_link = urlparse(link)
-    if parsed_link.scheme:
-        link = urlunparse(parsed_link._replace(scheme=''))[2:]
-    request_url = f'https://api-ssl.bitly.com/v4/bitlinks/{link}'
-    response = requests.get(request_url, headers=header)
-    return response.ok
-
-
-def main():
-    load_dotenv()
-    bitly_token = os.getenv('BITLY_TOKEN')
-    header = {
-        'Authorization': f'Bearer {bitly_token}'
-    }
-
-    parser = argparse.ArgumentParser(description='Обработка введенных в консоль URL-адресов')
-    parser.add_argument('user_links', nargs='+', help='Введенные ссылки')
-    args = parser.parse_args()
-    
-    for user_link in args.user_links:
-        try:
-            requests.get(user_link).raise_for_status()
-        except requests.exceptions.HTTPError:
-                print('Нерабочая ссылка - ', user_link)
-                return
-
-        if is_bitlink(user_link, header):
-            clicks = count_clicks(user_link, header)
-            print('Количество кликов ', clicks)
+def print_game(wrong, word, letters):
+    print('\nWrong guess:', ', '.join(wrong))
+    for i in letters:
+        if i is None:
+            print(' ', end=' ')
         else:
-            bitlink = shorten_link(user_link, header)
-            print('Битлинк ', bitlink)
+            print(i, end=' ')
+    print()
+    for i in word:
+        if i != ' ':
+            print('-', end=' ')
+        else:
+            print(' ', end=' ')
+    print()
 
 
-if __name__ == '__main__':
-    main()
+def get_letter(attempt, guess):
+    user_input = input(f'> Guess a letter ({attempt} attempts left): ').lower()
+    if len(user_input) != 1 or user_input not in ascii_lowercase:
+        print("> Please input a letter!")
+    elif user_input in guess:
+        print(f"> You have guessed '{user_input}' before")
+    else:
+        return user_input
+
+
+def play(word):
+    attempt = 6
+    guess, guess_wrong = [], []
+    letters = []
+    for i in word:
+        i = None if i != ' ' else i
+        letters.append(i)
+    while attempt > 0:
+        print_game(guess_wrong, word, letters)
+        if None not in letters:
+            print('> You win!')
+            break
+        user_letter = get_letter(attempt, guess)
+        if user_letter is not None:
+            for i in range(len(word)):
+                if user_letter == word[i]:
+                    letters[i] = user_letter
+            guess.append(user_letter)
+            if user_letter not in letters:
+                guess_wrong.append(user_letter)
+                attempt -= 1
+    else:
+        print_game(guess_wrong, word, letters)
+        print('> You lose...')
+        print(f'> Answer: {word.capitalize()}')
+
+
+if __name__ == "__main__":
+    word = get_rand_word(os.path.join('data', FILENAME))
+    play(word)
